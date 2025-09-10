@@ -1,1 +1,1 @@
-# penney_game
+# Penney Game Simulation
