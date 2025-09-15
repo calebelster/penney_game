@@ -33,6 +33,12 @@ def main():
                 zeros += 1
         print(f'Number of 1s: {ones}')
         print(f'Number of 0s: {zeros}')
+    try:
+        os.remove('data/decks_bits.bin')
+        os.remove('data/decks_bitarray.bin')
+        print("Files deleted.")
+    except FileNotFoundError:
+        print("One or both files not found for deletion.")
 
 if __name__ == "__main__":
     main()

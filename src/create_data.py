@@ -65,7 +65,7 @@ def create_deck_data_bitarray(num_decks=1_000_000, output_name='decks_bitarray.b
         if num_decks % batch_size:
             batches.append(num_decks % batch_size)
 
-        futures = [executor.submit(_create_bitarray_batch(), batch) for batch in batches]
+        futures = [executor.submit(_create_bitarray_batch, batch) for batch in batches]
 
         with open(output_path, 'wb') as f:
             for future in concurrent.futures.as_completed(futures):
