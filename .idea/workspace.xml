@@ -4,11 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="33d77701-9938-499e-b476-b54eff173040" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/src/classes.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/penney_game.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/penney_game.iml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/create_data.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/create_data.py" afterDir="false" />
-    </list>
+    <list default="true" id="33d77701-9938-499e-b476-b54eff173040" name="Changes" comment="" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -29,7 +25,7 @@
   "keyToString": {
     "Python.main.executor": "Run",
     "RunOnceActivity.ShowReadmeOnStart": "true",
-    "git-widget-placeholder": "creating__format",
+    "git-widget-placeholder": "main",
     "node.js.detected.package.eslint": "true",
     "node.js.detected.package.tslint": "true",
     "node.js.selected.package.eslint": "(autodetect)",
