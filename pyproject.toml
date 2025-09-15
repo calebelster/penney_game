@@ -8,4 +8,5 @@ dependencies = [
     "bitarray>=3.7.1",
     "numpy>=2.3.3",
     "pandas>=2.3.2",
+    "pytest>=8.4.2",
 ]

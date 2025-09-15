@@ -34,7 +34,7 @@ def _create_bitarray_batch(size: int) -> bitarray:
 
 
 @Debugger.debug
-def create_deck_data_only_bits(num_decks=1_000_000, output_name='decks_bits.bin', batch_size=10000):
+def create_deck_data_only_bits(num_decks=2_000_000, output_name='decks_bits.bin', batch_size=10000):
     output_dir = 'data'
     os.makedirs(output_dir, exist_ok=True)
     output_path = os.path.join(output_dir, output_name)
@@ -54,7 +54,7 @@ def create_deck_data_only_bits(num_decks=1_000_000, output_name='decks_bits.bin'
 
 
 @Debugger.debug
-def create_deck_data_bitarray(num_decks=1_000_000, output_name='decks_bitarray.bin', batch_size=10000):
+def create_deck_data_bitarray(num_decks=2_000_000, output_name='decks_bitarray.bin', batch_size=10000):
     output_dir = 'data'
     os.makedirs(output_dir, exist_ok=True)
     output_path = os.path.join(output_dir, output_name)
