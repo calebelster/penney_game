@@ -4,16 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="33d77701-9938-499e-b476-b54eff173040" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/DataGeneration.md" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/tests/test_deck_creation.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/data/decks_bitarray.bin" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/data/decks_bits.bin" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/pyproject.toml" beforeDir="false" afterPath="$PROJECT_DIR$/pyproject.toml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/create_data.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/create_data.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/uv.lock" beforeDir="false" afterPath="$PROJECT_DIR$/uv.lock" afterDir="false" />
-    </list>
+    <list default="true" id="33d77701-9938-499e-b476-b54eff173040" name="Changes" comment="" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -63,7 +54,7 @@
       <workItem from="1757524280830" duration="516000" />
       <workItem from="1757525070459" duration="184000" />
       <workItem from="1757525278269" duration="709000" />
-      <workItem from="1757955665430" duration="2904000" />
+      <workItem from="1757955665430" duration="2924000" />
     </task>
     <servers />
   </component>
