@@ -1,10 +1,8 @@
 import os
 import numpy as np
-from src.classes import Debugger
 from bitarray import bitarray
 import concurrent.futures
 from typing import List
-
 
 def _create_bit_batch(num_decks: int) -> List[bytes]:
     deck_size = 52
@@ -23,7 +21,6 @@ def _create_bit_batch(num_decks: int) -> List[bytes]:
         batch_bytes.extend(deck_bytes)
     return batch_bytes
 
-
 def _create_bitarray_batch(size: int) -> bitarray:
     batch = bitarray()
     for _ in range(size):
@@ -32,8 +29,6 @@ def _create_bitarray_batch(size: int) -> bitarray:
         batch.extend(deck)
     return batch
 
-
-@Debugger.debug
 def create_deck_data_only_bits(num_decks=2_000_000, output_name='decks_bits.bin', batch_size=10000):
     output_dir = 'data'
     os.makedirs(output_dir, exist_ok=True)
@@ -50,15 +45,10 @@ def create_deck_data_only_bits(num_decks=2_000_000, output_name='decks_bits.bin'
             for future in concurrent.futures.as_completed(futures):
                 f.write(bytes(future.result()))
 
-    print(f"Created {num_decks} shuffled decks in '{output_path}'")
-
-
-@Debugger.debug
 def create_deck_data_bitarray(num_decks=2_000_000, output_name='decks_bitarray.bin', batch_size=10000):
     output_dir = 'data'
     os.makedirs(output_dir, exist_ok=True)
     output_path = os.path.join(output_dir, output_name)
-
 
     with concurrent.futures.ThreadPoolExecutor() as executor:
         batches = [batch_size] * (num_decks // batch_size)
@@ -70,6 +60,3 @@ def create_deck_data_bitarray(num_decks=2_000_000, output_name='decks_bitarray.b
         with open(output_path, 'wb') as f:
             for future in concurrent.futures.as_completed(futures):
                 future.result().tofile(f)
-
-    print(f"Created {num_decks} shuffled decks in '{output_path}'")
-
