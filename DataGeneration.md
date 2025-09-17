@@ -13,3 +13,10 @@ This method uses the `bitarray` library to create a binary file. It is faster th
 #### Important Notes:
 
 Both methods make use of parallel processing to speed up the data generation process. However, the bits-only method is significantly slower and more error-prone compared to the bitarray method.
+
+
+
+| Runtime | Peak Memory Usage (KiB)| File Size () |  |
+|----------|----------|----------|
+| Row 1    | Value A  | Value B  |
+| Row 2    | Value C  | Value D  |
