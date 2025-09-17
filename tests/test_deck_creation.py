@@ -6,6 +6,7 @@ import statistics
 from bitarray import bitarray
 from src.create_data import create_deck_data_only_bits, create_deck_data_bitarray
 
+
 class TestDeckCreation(unittest.TestCase):
     NUM_DECKS = 100_000
     BATCH_SIZE = 1_000
@@ -34,6 +35,7 @@ class TestDeckCreation(unittest.TestCase):
     def measure_performance(self, func, filename):
         times = []
         peaks = []
+        sizes = []
         for _ in range(self.NUM_RUNS):
             if os.path.exists(filename):
                 os.remove(filename)
@@ -46,15 +48,29 @@ class TestDeckCreation(unittest.TestCase):
             times.append(elapsed)
             peaks.append(peak)
             if os.path.exists(filename):
+                sizes.append(os.path.getsize(filename))
                 os.remove(filename)
-        return times, peaks
+        return times, peaks, sizes
+
+    def print_stats(self, label, times, peaks, sizes):
+        print(
+            f"{label}: time (s) avg={statistics.mean(times):.4f}, std={statistics.stdev(times):.4f}, "
+            f"median={statistics.median(times):.4f}, min={min(times):.4f}, max={max(times):.4f}"
+        )
+        print(
+            f"{label}: peak mem (KiB) avg={statistics.mean(peaks)/1024:.2f}, std={statistics.stdev(peaks)/1024:.2f}, "
+            f"median={statistics.median(peaks)/1024:.2f}, min={min(peaks)/1024:.2f}, max={max(peaks)/1024:.2f}"
+        )
+        print(
+            f"{label}: file size (bytes) avg={statistics.mean(sizes):.2f}, std={statistics.stdev(sizes):.2f}, "
+            f"median={statistics.median(sizes):.2f}, min={min(sizes)}, max={max(sizes)}"
+        )
 
     def test_bits_creation(self):
         filename = 'data/decks_bits.bin'
         self.addCleanup(lambda: os.path.exists(filename) and os.remove(filename))
-        times, peaks = self.measure_performance(create_deck_data_only_bits, filename)
-        print(f"Bits: time (s) avg={statistics.mean(times):.4f}, median={statistics.median(times):.4f}, min={min(times):.4f}, max={max(times):.4f}")
-        print(f"Bits: peak mem (KiB) avg={statistics.mean(peaks)/1024:.2f}, median={statistics.median(peaks)/1024:.2f}, min={min(peaks)/1024:.2f}, max={max(peaks)/1024:.2f}")
+        times, peaks, sizes = self.measure_performance(create_deck_data_only_bits, filename)
+        self.print_stats("Bits", times, peaks, sizes)
         # Run once more for validity check
         create_deck_data_only_bits(num_decks=self.NUM_DECKS, batch_size=self.BATCH_SIZE)
         self.assertTrue(os.path.exists(filename))
@@ -64,15 +80,13 @@ class TestDeckCreation(unittest.TestCase):
     def test_bitarray_creation(self):
         filename = 'data/decks_bitarray.bin'
         self.addCleanup(lambda: os.path.exists(filename) and os.remove(filename))
-        times, peaks = self.measure_performance(create_deck_data_bitarray, filename)
-        print(f"Bitarray: time (s) avg={statistics.mean(times):.4f}, median={statistics.median(times):.4f}, min={min(times):.4f}, max={max(times):.4f}")
-        print(f"Bitarray: peak mem (KiB) avg={statistics.mean(peaks)/1024:.2f}, median={statistics.median(peaks)/1024:.2f}, min={min(peaks)/1024:.2f}, max={max(peaks)/1024:.2f}")
+        times, peaks, sizes = self.measure_performance(create_deck_data_bitarray, filename)
+        self.print_stats("Bitarray", times, peaks, sizes)
         # Run once more for validity check
         create_deck_data_bitarray(num_decks=self.NUM_DECKS, batch_size=self.BATCH_SIZE)
         self.assertTrue(os.path.exists(filename))
         self.check_deck_validity_bitarray(filename)
         os.remove(filename)
-
 
 if __name__ == '__main__':
     unittest.main()
