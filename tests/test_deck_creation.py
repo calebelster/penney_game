@@ -8,8 +8,8 @@ from src.create_data import create_deck_data_only_bits, create_deck_data_bitarra
 
 
 class TestDeckCreation(unittest.TestCase):
-    NUM_DECKS = 100_000
-    BATCH_SIZE = 1_000
+    NUM_DECKS = 1_000_000
+    BATCH_SIZE = 10_000
     NUM_RUNS = 5
 
     def check_deck_validity_bits(self, filename):
