@@ -6,8 +6,6 @@
   <component name="ChangeListManager">
     <list default="true" id="33d77701-9938-499e-b476-b54eff173040" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/create_data.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/create_data.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/tests/test_deck_creation.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/test_deck_creation.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -59,7 +57,7 @@
       <workItem from="1757525070459" duration="184000" />
       <workItem from="1757525278269" duration="709000" />
       <workItem from="1757955665430" duration="2924000" />
-      <workItem from="1758128561771" duration="1965000" />
+      <workItem from="1758128561771" duration="3035000" />
     </task>
     <servers />
   </component>
@@ -67,6 +65,6 @@
     <option name="version" value="3" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
-    <SUITE FILE_PATH="coverage/penney_game$pytest_in_test_deck_creation_py.coverage" NAME="pytest in test_deck_creation.py Coverage Results" MODIFIED="1758129666514" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/tests" />
+    <SUITE FILE_PATH="coverage/penney_game$pytest_in_test_deck_creation_py.coverage" NAME="pytest in test_deck_creation.py Coverage Results" MODIFIED="1758130666630" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/tests" />
   </component>
 </project>
