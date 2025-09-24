@@ -14,7 +14,7 @@ def main():
         print("Deck data created.")
     else:
         print("Deck data already exists. Skipping creation.")
-    
+
 
     print("Scoring deck data...")
     score_deck_data_bitarray(input_name=data_file, output_name=score_file)
