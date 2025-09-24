@@ -1,44 +1,24 @@
 from src.create_data import *
+from src.score_data import *
 from bitarray import bitarray
 
-def main():
-    print("Only bits method:")
-    create_deck_data_only_bits()
-    with open('data/decks_bits.bin', 'rb') as f:
-        data = f.read(7)  # 7 bytes = 56 bits
-        ones = zeros = 0
-        for i in range(52):
-            byte_index = i // 8
-            bit_index = 7 - (i % 8)
-            bit = (data[byte_index] >> bit_index) & 1
-            if bit:
-                ones += 1
-            else:
-                zeros += 1
-            print(f'Bit {i + 1}: {bit}')
-        print(f'Number of 1s: {ones}')
-        print(f'Number of 0s: {zeros}')
 
-    print("\nBitarray method:")
-    create_deck_data_bitarray()
-    with open('data/decks_bitarray.bin', 'rb') as f:
-        ba = bitarray()
-        ba.fromfile(f, 52)  # Read exactly 52 bits (one deck)
-        ones = zeros = 0
-        for i, bit in enumerate(ba[:52]):
-            print(f'Bit {i + 1}: {1 if bit else 0}')
-            if bit:
-                ones += 1
-            else:
-                zeros += 1
-        print(f'Number of 1s: {ones}')
-        print(f'Number of 0s: {zeros}')
-    try:
-        os.remove('data/decks_bits.bin')
-        os.remove('data/decks_bitarray.bin')
-        print("Files deleted.")
-    except FileNotFoundError:
-        print("One or both files not found for deletion.")
+def main():
+    ### create data if not already created and then score it and print the results
+
+    data_file = 'decks_bitarray.bin'
+    score_file = 'scores_bitarray.npy'
+    if not os.path.exists(os.path.join('data', data_file)):
+        print("Creating deck data...")
+        create_deck_data_bitarray(num_decks=2_000_000, output_name=data_file, batch_size=10000)
+        print("Deck data created.")
+    else:
+        print("Deck data already exists. Skipping creation.")
+    
+
+    print("Scoring deck data...")
+    score_deck_data_bitarray(input_name=data_file, output_name=score_file)
+    print("Deck data scored.")
 
 if __name__ == "__main__":
     main()
