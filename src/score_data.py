@@ -1,59 +1,177 @@
-### Score created data files by tricks and cards won for each player in each game, there are only ever two players and they never choose the same color order
-### Sorting by tricks involves 1 point for each set of three card colors matching a players choice of three card colors
-### Sorting by cards won involves a point for each card before the winning three card colors matching a players choice of three card colors including the three cards
-### ensure the tricks counting does not go out of range
+# score_data.py
+
 import os
 import numpy as np
-from typing import Tuple
 from bitarray import bitarray
+import numba as nb
+from concurrent.futures import ProcessPoolExecutor
+import pandas as pd
+from itertools import product
 
-def _score_bitarray_deck(deck: bitarray) -> Tuple[int, int]:
-    player1_tricks = 0
-    player2_tricks = 0
-    player1_cards = 0
-    player2_cards = 0
 
-    # Scoring by tricks (sets of three)
-    for i in range(0, 52, 3):
-        if i + 3 > 52:
-            break
-        triplet = deck[i:i + 3]
-        if triplet.count(1) > triplet.count(0):
-            player2_tricks += 1
-        elif triplet.count(0) > triplet.count(1):
-            player1_tricks += 1
+def read_deck_file(file_path: str) -> np.ndarray:
+    ba = bitarray()
+    with open(file_path, 'rb') as f:
+        ba.fromfile(f)
+    arr = np.frombuffer(ba.unpack(), dtype=np.uint8)  # 0/1 array
+    n_decks = len(arr) // 52
+    arr = arr[:n_decks * 52]
+    decks = arr.reshape((n_decks, 52))
+    return decks
 
-    # Scoring by cards won (including the winning triplet)
-    for i in range(52):
-        if deck[i] == 1:
-            player2_cards += 1
-        else:
-            player1_cards += 1
 
-    return (player1_tricks, player2_tricks), (player1_cards, player2_cards)
+@nb.njit
+def score_deck_humble_jit(deck: np.ndarray, s1: np.ndarray, s2: np.ndarray):
+    """Score one deck using Humble-Nishiyama rules."""
+    k = s1.size
+    p1_cards = 0
+    p2_cards = 0
+    p1_tricks = 0
+    p2_tricks = 0
+    last_award_idx = 0
 
-def score_deck_data_bitarray(input_name='decks_bitarray.bin', output_name='scores_bitarray.npy'):
-    input_dir = 'data'
-    output_dir = 'data'
-    os.makedirs(output_dir, exist_ok=True)
-    input_path = os.path.join(input_dir, input_name)
-    output_path = os.path.join(output_dir, output_name)
+    for i in range(k - 1, deck.size):
+        match1 = True
+        match2 = True
+        for j in range(k):
+            if deck[i - k + 1 + j] != s1[j]:
+                match1 = False
+            if deck[i - k + 1 + j] != s2[j]:
+                match2 = False
+        if match1:
+            p1_cards += (i - last_award_idx + 1)
+            p1_tricks += 1
+            last_award_idx = i + 1
+        elif match2:
+            p2_cards += (i - last_award_idx + 1)
+            p2_tricks += 1
+            last_award_idx = i + 1
 
-    scores = []
+    return p1_cards, p2_cards, p1_tricks, p2_tricks
 
-    with open(input_path, 'rb') as f:
-        deck_size = 52
-        byte_size = (deck_size + 7) // 8
-        while True:
-            deck_bytes = f.read(byte_size)
-            if not deck_bytes:
-                break
-            deck = bitarray()
-            deck.frombytes(deck_bytes)
-            deck = deck[:deck_size]  # Ensure we only take the first 52 bits
-            score_tricks, score_cards = _score_bitarray_deck(deck)
-            scores.append(score_tricks + score_cards)
 
-    scores_array = np.array(scores, dtype=np.uint8)
-    np.save(output_path, scores_array)
+def _seq_to_array(seq: str) -> np.ndarray:
+    return np.array([0 if c.lower() == 'r' else 1 for c in seq], dtype=np.uint8)
 
+
+def all_sequences(k=3):
+    return [''.join('r' if x == 0 else 'b' for x in seq)
+            for seq in product([0, 1], repeat=k)]
+
+
+def _winner(deck, s1, s2):
+    """Return winners for cards and tricks separately."""
+    c1, c2, t1, t2 = score_deck_humble_jit(deck, s1, s2)
+    # cards winner
+    if c1 > c2:
+        w_cards = 1
+    elif c2 > c1:
+        w_cards = 2
+    else:
+        w_cards = 0
+    # tricks winner
+    if t1 > t2:
+        w_tricks = 1
+    elif t2 > t1:
+        w_tricks = 2
+    else:
+        w_tricks = 0
+    return w_cards, w_tricks
+
+
+def _batch_score(decks_chunk, seqs, seq_arrays):
+    """Top-level batch scorer so ProcessPoolExecutor can pickle it."""
+    nseq = len(seqs)
+    local_cards_p1 = np.zeros((nseq, nseq), dtype=np.int64)
+    local_cards_p2 = np.zeros((nseq, nseq), dtype=np.int64)
+    local_cards_tie = np.zeros((nseq, nseq), dtype=np.int64)
+
+    local_tricks_p1 = np.zeros((nseq, nseq), dtype=np.int64)
+    local_tricks_p2 = np.zeros((nseq, nseq), dtype=np.int64)
+    local_tricks_tie = np.zeros((nseq, nseq), dtype=np.int64)
+
+    for deck in decks_chunk:
+        for i, s1 in enumerate(seqs):
+            for j, s2 in enumerate(seqs):
+                if i == j:
+                    continue
+                w_cards, w_tricks = _winner(deck, seq_arrays[s1], seq_arrays[s2])
+                if w_cards == 1:
+                    local_cards_p1[i, j] += 1
+                elif w_cards == 2:
+                    local_cards_p2[i, j] += 1
+                else:
+                    local_cards_tie[i, j] += 1
+
+                if w_tricks == 1:
+                    local_tricks_p1[i, j] += 1
+                elif w_tricks == 2:
+                    local_tricks_p2[i, j] += 1
+                else:
+                    local_tricks_tie[i, j] += 1
+
+    return (local_cards_p1, local_cards_p2, local_cards_tie,
+            local_tricks_p1, local_tricks_p2, local_tricks_tie)
+
+
+def compute_winrate_table(file_path: str, k: int = 3,
+                          workers: int = None, batch_size: int = 50_000):
+    """
+    Compute win rates for every distinct pair of sequences of length k.
+
+    Returns two DataFrames:
+        cards_df: win rates by cards
+        tricks_df: win rates by tricks
+    Each cell = 'p1_odds (p2_odds)'.
+    """
+    decks = read_deck_file(file_path)
+    n = decks.shape[0]
+
+    seqs = all_sequences(k)
+    nseq = len(seqs)
+
+    seq_arrays = {s: _seq_to_array(s) for s in seqs}
+
+    cards_p1 = np.zeros((nseq, nseq), dtype=np.int64)
+    cards_p2 = np.zeros((nseq, nseq), dtype=np.int64)
+    cards_tie = np.zeros((nseq, nseq), dtype=np.int64)
+
+    tricks_p1 = np.zeros((nseq, nseq), dtype=np.int64)
+    tricks_p2 = np.zeros((nseq, nseq), dtype=np.int64)
+    tricks_tie = np.zeros((nseq, nseq), dtype=np.int64)
+
+    if workers is None:
+        workers = os.cpu_count()
+
+    chunks = [decks[i:i + batch_size] for i in range(0, n, batch_size)]
+
+    with ProcessPoolExecutor(max_workers=workers) as ex:
+        futures = [ex.submit(_batch_score, chunk, seqs, seq_arrays) for chunk in chunks]
+        for fut in futures:
+            (lc1, lc2, lct, lt1, lt2, ltt) = fut.result()
+            cards_p1 += lc1
+            cards_p2 += lc2
+            cards_tie += lct
+            tricks_p1 += lt1
+            tricks_p2 += lt2
+            tricks_tie += ltt
+
+    # Compute odds
+    def _format_odds(p1, p2, tie):
+        total = p1 + p2 + tie
+        if total == 0:
+            return np.nan
+        return f"{p1/total:.2f} ({p2/total:.2f})"
+
+    cards_table = pd.DataFrame(index=seqs, columns=seqs)
+    tricks_table = pd.DataFrame(index=seqs, columns=seqs)
+    for i, s1 in enumerate(seqs):
+        for j, s2 in enumerate(seqs):
+            if i == j:
+                cards_table.loc[s1, s2] = np.nan
+                tricks_table.loc[s1, s2] = np.nan
+            else:
+                cards_table.loc[s1, s2] = _format_odds(cards_p1[i, j], cards_p2[i, j], cards_tie[i, j])
+                tricks_table.loc[s1, s2] = _format_odds(tricks_p1[i, j], tricks_p2[i, j], tricks_tie[i, j])
+
+    return cards_table, tricks_table
