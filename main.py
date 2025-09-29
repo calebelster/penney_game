@@ -1,44 +1,21 @@
 from src.create_data import *
+from src.score_data import *
 from bitarray import bitarray
+from src.score_data import compute_winrate_table
 
 def main():
-    print("Only bits method:")
-    create_deck_data_only_bits()
-    with open('data/decks_bits.bin', 'rb') as f:
-        data = f.read(7)  # 7 bytes = 56 bits
-        ones = zeros = 0
-        for i in range(52):
-            byte_index = i // 8
-            bit_index = 7 - (i % 8)
-            bit = (data[byte_index] >> bit_index) & 1
-            if bit:
-                ones += 1
-            else:
-                zeros += 1
-            print(f'Bit {i + 1}: {bit}')
-        print(f'Number of 1s: {ones}')
-        print(f'Number of 0s: {zeros}')
+    file_path = 'data/decks/decks_bitarray.bin'
 
-    print("\nBitarray method:")
-    create_deck_data_bitarray()
-    with open('data/decks_bitarray.bin', 'rb') as f:
-        ba = bitarray()
-        ba.fromfile(f, 52)  # Read exactly 52 bits (one deck)
-        ones = zeros = 0
-        for i, bit in enumerate(ba[:52]):
-            print(f'Bit {i + 1}: {1 if bit else 0}')
-            if bit:
-                ones += 1
-            else:
-                zeros += 1
-        print(f'Number of 1s: {ones}')
-        print(f'Number of 0s: {zeros}')
-    try:
-        os.remove('data/decks_bits.bin')
-        os.remove('data/decks_bitarray.bin')
-        print("Files deleted.")
-    except FileNotFoundError:
-        print("One or both files not found for deletion.")
+    cards_df, tricks_df = compute_winrate_table(file_path)
+
+    print("Win rates by cards:")
+    print(cards_df)
+
+    print("Win rates by tricks:")
+    print(tricks_df)
+
+    cards_df.to_csv('data/tables/winrates_cards.csv')
+    tricks_df.to_csv('data/tables/winrates_tricks.csv')
 
 if __name__ == "__main__":
     main()
