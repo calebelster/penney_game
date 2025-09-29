@@ -1,5 +1,3 @@
-# score_data.py
-
 import os
 import numpy as np
 from bitarray import bitarray
@@ -22,7 +20,10 @@ def read_deck_file(file_path: str) -> np.ndarray:
 
 @nb.njit
 def score_deck_humble_jit(deck: np.ndarray, s1: np.ndarray, s2: np.ndarray):
-    """Score one deck using Humble-Nishiyama rules."""
+    """
+    Score one deck using Humble-Nishiyama rules.
+    Ensures we don't match using already-awarded cards.
+    """
     k = s1.size
     p1_cards = 0
     p2_cards = 0
@@ -31,13 +32,19 @@ def score_deck_humble_jit(deck: np.ndarray, s1: np.ndarray, s2: np.ndarray):
     last_award_idx = 0
 
     for i in range(k - 1, deck.size):
+        # only check windows that are fully in the current pile (i-k+1 .. i)
+        if (i - k + 1) < last_award_idx:
+            continue
+
         match1 = True
         match2 = True
         for j in range(k):
-            if deck[i - k + 1 + j] != s1[j]:
+            v = deck[i - k + 1 + j]
+            if v != s1[j]:
                 match1 = False
-            if deck[i - k + 1 + j] != s2[j]:
+            if v != s2[j]:
                 match2 = False
+
         if match1:
             p1_cards += (i - last_award_idx + 1)
             p1_tricks += 1
@@ -122,7 +129,7 @@ def compute_winrate_table(file_path: str, k: int = 3,
     Returns two DataFrames:
         cards_df: win rates by cards
         tricks_df: win rates by tricks
-    Each cell = 'p1_odds (p2_odds)'.
+    Each cell = 'p1% (p2%)'.
     """
     decks = read_deck_file(file_path)
     n = decks.shape[0]
@@ -148,7 +155,7 @@ def compute_winrate_table(file_path: str, k: int = 3,
     with ProcessPoolExecutor(max_workers=workers) as ex:
         futures = [ex.submit(_batch_score, chunk, seqs, seq_arrays) for chunk in chunks]
         for fut in futures:
-            (lc1, lc2, lct, lt1, lt2, ltt) = fut.result()
+            lc1, lc2, lct, lt1, lt2, ltt = fut.result()
             cards_p1 += lc1
             cards_p2 += lc2
             cards_tie += lct
@@ -156,22 +163,29 @@ def compute_winrate_table(file_path: str, k: int = 3,
             tricks_p2 += lt2
             tricks_tie += ltt
 
-    # Compute odds
+    # Format a single cell as "p1% (p2%)"
     def _format_odds(p1, p2, tie):
         total = p1 + p2 + tie
         if total == 0:
             return np.nan
-        return f"{p1/total:.2f} ({p2/total:.2f})"
+        p1_pct = round(p1 / total * 100, 2)
+        p2_pct = round(p2 / total * 100, 2)
+        return f"{p1_pct:.2f} ({p2_pct:.2f})"
 
     cards_table = pd.DataFrame(index=seqs, columns=seqs)
     tricks_table = pd.DataFrame(index=seqs, columns=seqs)
+
     for i, s1 in enumerate(seqs):
         for j, s2 in enumerate(seqs):
             if i == j:
                 cards_table.loc[s1, s2] = np.nan
                 tricks_table.loc[s1, s2] = np.nan
             else:
-                cards_table.loc[s1, s2] = _format_odds(cards_p1[i, j], cards_p2[i, j], cards_tie[i, j])
-                tricks_table.loc[s1, s2] = _format_odds(tricks_p1[i, j], tricks_p2[i, j], tricks_tie[i, j])
+                cards_table.loc[s1, s2] = _format_odds(
+                    cards_p1[i, j], cards_p2[i, j], cards_tie[i, j]
+                )
+                tricks_table.loc[s1, s2] = _format_odds(
+                    tricks_p1[i, j], tricks_p2[i, j], tricks_tie[i, j]
+                )
 
     return cards_table, tricks_table
