@@ -1,5 +1,3 @@
-<<<<<<< Updated upstream
-=======
 import os
 import numpy as np
 from bitarray import bitarray
@@ -192,4 +190,3 @@ def compute_winrate_table(file_path: str, k: int = 3,
                 )
 
     return cards_table, tricks_table
->>>>>>> Stashed changes
