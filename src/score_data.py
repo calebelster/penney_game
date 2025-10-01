@@ -122,7 +122,8 @@ def _batch_score(decks_chunk, seqs, seq_arrays):
 
 
 def compute_winrate_table(file_path: str, k: int = 3,
-                          workers: int = None, batch_size: int = 50_000):
+                          workers: int = None, batch_size: int = 50_000,
+                          max_decks: int = None):
     """
     Compute win/tie rates for every distinct pair of sequences of length k.
 
@@ -134,6 +135,8 @@ def compute_winrate_table(file_path: str, k: int = 3,
     Rows = Player 1 patterns, Columns = Player 2 patterns.
     """
     decks = read_deck_file(file_path)
+    if max_decks is not None:
+        decks = decks[:max_decks]  # <-- only use a subset
     n = decks.shape[0]
 
     seqs = all_sequences(k)
