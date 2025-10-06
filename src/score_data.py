@@ -4,47 +4,34 @@ from bitarray import bitarray
 import numba as nb
 from concurrent.futures import ProcessPoolExecutor
 import pandas as pd
-from itertools import product
 
 
 def read_deck_file(file_path: str) -> np.ndarray:
+    """Read decks from a bitarray file -> NumPy array (n_decks, 52)."""
     ba = bitarray()
     with open(file_path, 'rb') as f:
         ba.fromfile(f)
-    arr = np.frombuffer(ba.unpack(), dtype=np.uint8)  # 0/1 array
+    arr = np.frombuffer(ba.unpack(), dtype=np.uint8)
     n_decks = len(arr) // 52
     arr = arr[:n_decks * 52]
-    decks = arr.reshape((n_decks, 52))
-    return decks
+    return arr.reshape((n_decks, 52))
 
 
 @nb.njit
 def score_deck_humble_jit(deck: np.ndarray, s1: np.ndarray, s2: np.ndarray):
-    """
-    Score one deck using Humble-Nishiyama rules.
-    Ensures we don't match using already-awarded cards.
-    """
+    """Score one deck using Humble–Nishiyama rules."""
     k = s1.size
-    p1_cards = 0
-    p2_cards = 0
-    p1_tricks = 0
-    p2_tricks = 0
+    p1_cards = p2_cards = p1_tricks = p2_tricks = 0
     last_award_idx = 0
 
     for i in range(k - 1, deck.size):
-        # only check windows that are fully in the current pile (i-k+1 .. i)
-        if (i - k + 1) < last_award_idx:
-            continue
-
         match1 = True
         match2 = True
         for j in range(k):
-            v = deck[i - k + 1 + j]
-            if v != s1[j]:
+            if deck[i - k + 1 + j] != s1[j]:
                 match1 = False
-            if v != s2[j]:
+            if deck[i - k + 1 + j] != s2[j]:
                 match2 = False
-
         if match1:
             p1_cards += (i - last_award_idx + 1)
             p1_tricks += 1
@@ -58,96 +45,75 @@ def score_deck_humble_jit(deck: np.ndarray, s1: np.ndarray, s2: np.ndarray):
 
 
 def _seq_to_array(seq: str) -> np.ndarray:
-    return np.array([0 if c.lower() == 'r' else 1 for c in seq], dtype=np.uint8)
-
-
-def all_sequences(k=3):
-    return [''.join('r' if x == 0 else 'b' for x in seq)
-            for seq in product([0, 1], repeat=k)]
-
-
-def _winner(deck, s1, s2):
-    """Return winners for cards and tricks separately."""
-    c1, c2, t1, t2 = score_deck_humble_jit(deck, s1, s2)
-    # cards winner
-    if c1 > c2:
-        w_cards = 1
-    elif c2 > c1:
-        w_cards = 2
-    else:
-        w_cards = 0
-    # tricks winner
-    if t1 > t2:
-        w_tricks = 1
-    elif t2 > t1:
-        w_tricks = 2
-    else:
-        w_tricks = 0
-    return w_cards, w_tricks
+    """Convert 'rrb' → [1, 1, 0]."""
+    return np.array([1 if c == 'r' else 0 for c in seq.lower()], dtype=np.uint8)
 
 
 def _batch_score(decks_chunk, seqs, seq_arrays):
-    """Top-level batch scorer so ProcessPoolExecutor can pickle it."""
+    """Score chunk of decks for all sequence pairs."""
     nseq = len(seqs)
-    local_cards_p1 = np.zeros((nseq, nseq), dtype=np.int64)
-    local_cards_p2 = np.zeros((nseq, nseq), dtype=np.int64)
-    local_cards_tie = np.zeros((nseq, nseq), dtype=np.int64)
-
-    local_tricks_p1 = np.zeros((nseq, nseq), dtype=np.int64)
-    local_tricks_p2 = np.zeros((nseq, nseq), dtype=np.int64)
-    local_tricks_tie = np.zeros((nseq, nseq), dtype=np.int64)
+    lc1 = np.zeros((nseq, nseq), dtype=np.int64)
+    lc2 = np.zeros((nseq, nseq), dtype=np.int64)
+    lct = np.zeros((nseq, nseq), dtype=np.int64)
+    lt1 = np.zeros((nseq, nseq), dtype=np.int64)
+    lt2 = np.zeros((nseq, nseq), dtype=np.int64)
+    ltt = np.zeros((nseq, nseq), dtype=np.int64)
 
     for deck in decks_chunk:
         for i, s1 in enumerate(seqs):
             for j, s2 in enumerate(seqs):
                 if i == j:
                     continue
-                w_cards, w_tricks = _winner(deck, seq_arrays[s1], seq_arrays[s2])
-                if w_cards == 1:
-                    local_cards_p1[i, j] += 1
-                elif w_cards == 2:
-                    local_cards_p2[i, j] += 1
+                c1, c2, t1, t2 = score_deck_humble_jit(deck, seq_arrays[s1], seq_arrays[s2])
+                # cards
+                if c1 > c2:
+                    lc1[i, j] += 1
+                elif c2 > c1:
+                    lc2[i, j] += 1
                 else:
-                    local_cards_tie[i, j] += 1
-
-                if w_tricks == 1:
-                    local_tricks_p1[i, j] += 1
-                elif w_tricks == 2:
-                    local_tricks_p2[i, j] += 1
+                    lct[i, j] += 1
+                # tricks
+                if t1 > t2:
+                    lt1[i, j] += 1
+                elif t2 > t1:
+                    lt2[i, j] += 1
                 else:
-                    local_tricks_tie[i, j] += 1
+                    ltt[i, j] += 1
+    return lc1, lc2, lct, lt1, lt2, ltt
 
-    return (local_cards_p1, local_cards_p2, local_cards_tie,
-            local_tricks_p1, local_tricks_p2, local_tricks_tie)
+
+def all_sequences_binary_order(k=3):
+    """Return ['bbb', 'bbr', ..., 'rrr'] (binary order with b=0, r=1)."""
+    seqs = []
+    for num in range(2 ** k):
+        bits = [(num >> (k - 1 - i)) & 1 for i in range(k)]
+        seq = ''.join('r' if bit else 'b' for bit in bits)
+        seqs.append(seq)
+    return seqs
 
 
 def compute_winrate_table(file_path: str, k: int = 3,
                           workers: int = None, batch_size: int = 50_000,
-                          max_decks: int = None):
+                          max_decks: int = None, seq_order_binary: bool = True):
     """
-    Compute win/tie rates for every distinct pair of sequences of length k.
+    Compute Humble–Nishiyama win/tie rates for all pairs.
 
-    Returns two DataFrames:
-        cards_df: rates by cards
-        tricks_df: rates by tricks
-
-    Each cell = 'P1% (Tie%)'; P2% = 100 - P1% - Tie%.
-    Rows = Player 1 patterns, Columns = Player 2 patterns.
+    Returns:
+      cards_df, tricks_df: formatted DataFrames ('P1% (Tie%)')
+      cards_pct_p1, cards_pct_tie, tricks_pct_p1, tricks_pct_tie, seqs
     """
     decks = read_deck_file(file_path)
     if max_decks is not None:
-        decks = decks[:max_decks]  # <-- only use a subset
+        decks = decks[:max_decks]
     n = decks.shape[0]
 
-    seqs = all_sequences(k)
+    seqs = all_sequences_binary_order(k) if seq_order_binary else all_sequences(k)
     nseq = len(seqs)
-
     seq_arrays = {s: _seq_to_array(s) for s in seqs}
 
     cards_p1 = np.zeros((nseq, nseq), dtype=np.int64)
     cards_p2 = np.zeros((nseq, nseq), dtype=np.int64)
     cards_tie = np.zeros((nseq, nseq), dtype=np.int64)
-
     tricks_p1 = np.zeros((nseq, nseq), dtype=np.int64)
     tricks_p2 = np.zeros((nseq, nseq), dtype=np.int64)
     tricks_tie = np.zeros((nseq, nseq), dtype=np.int64)
@@ -168,28 +134,30 @@ def compute_winrate_table(file_path: str, k: int = 3,
             tricks_p2 += lt2
             tricks_tie += ltt
 
-    def _format_rates(p1, p2, tie):
+    def _pct_matrices(p1, p2, tie):
         total = p1 + p2 + tie
-        if total == 0:
-            return np.nan
-        p1_pct = round(p1 / total * 100, 2)
-        tie_pct = round(tie / total * 100, 2)
-        return f"{p1_pct:.2f}% ({tie_pct:.2f}%)"  # P2 = 100 - p1 - tie
+        p1_pct = np.divide(p1, total, out=np.full_like(p1, np.nan, dtype=np.float64), where=total > 0) * 100
+        tie_pct = np.divide(tie, total, out=np.full_like(tie, np.nan, dtype=np.float64), where=total > 0) * 100
+        return np.round(p1_pct, 4), np.round(tie_pct, 4)
 
-    cards_table = pd.DataFrame(index=seqs, columns=seqs)
-    tricks_table = pd.DataFrame(index=seqs, columns=seqs)
+    cards_pct_p1, cards_pct_tie = _pct_matrices(cards_p1, cards_p2, cards_tie)
+    tricks_pct_p1, tricks_pct_tie = _pct_matrices(tricks_p1, tricks_p2, tricks_tie)
 
-    for i, s1 in enumerate(seqs):  # row = Player 1
-        for j, s2 in enumerate(seqs):  # col = Player 2
-            if i == j:
-                cards_table.loc[s1, s2] = np.nan
-                tricks_table.loc[s1, s2] = np.nan
-            else:
-                cards_table.loc[s1, s2] = _format_rates(
-                    cards_p1[i, j], cards_p2[i, j], cards_tie[i, j]
-                )
-                tricks_table.loc[s1, s2] = _format_rates(
-                    tricks_p1[i, j], tricks_p2[i, j], tricks_tie[i, j]
-                )
+    def _format_str_matrix(p1_pct, tie_pct):
+        n = p1_pct.shape[0]
+        mat = np.empty((n, n), dtype=object)
+        for i in range(n):
+            for j in range(n):
+                if i == j or np.isnan(p1_pct[i, j]):
+                    mat[i, j] = ""
+                else:
+                    mat[i, j] = f"{p1_pct[i,j]:.2f}% ({tie_pct[i,j]:.2f}%)"
+        df = pd.DataFrame(mat, index=seqs, columns=seqs)
+        df.index.name = "Player 1 pattern"
+        df.columns.name = "Player 2 pattern"
+        return df
 
-    return cards_table, tricks_table
+    cards_df = _format_str_matrix(cards_pct_p1, cards_pct_tie)
+    tricks_df = _format_str_matrix(tricks_pct_p1, tricks_pct_tie)
+
+    return cards_df, tricks_df, cards_pct_p1, cards_pct_tie, tricks_pct_p1, tricks_pct_tie, seqs

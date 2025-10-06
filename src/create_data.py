@@ -13,7 +13,7 @@ def _create_bitarray_batch(size: int) -> bitarray:
     return batch
 
 def create_deck_data_bitarray(num_decks=2_000_000, output_name='decks_bitarray.bin', batch_size=10000):
-    output_dir = 'data'
+    output_dir = 'data/decks'
     os.makedirs(output_dir, exist_ok=True)
     output_path = os.path.join(output_dir, output_name)
 
