@@ -10,7 +10,7 @@ from src.create_data import create_deck_data_bitarray, _create_bitarray_batch
 from src.score_data import compute_winrate_table
 
 # === Global paths & parameters ===
-DECK_FILE = "data/decks_bitarray.bin"
+DECK_FILE = "data/decks/decks_bitarray.bin"
 TARGET_DECKS = 5_000_000
 BATCH_SIZE = 10_000
 
@@ -41,35 +41,34 @@ def append_decks(file_path: str, num_to_add: int, batch_size: int = 10_000):
             ba.tofile(f)
 
 
-def plot_heatmap(p1_pct_matrix, seqs, title, outpath, highlight_best=True):
+def plot_heatmap(p1_pct_matrix, tie_pct_matrix, seqs, title, outpath, highlight_best=True):
     """
-    Plot a centered heatmap of P1 win %.
-    Blue = P1 favored, Red = opponent favored, White = ~50%.
-    Annotated with P1% values.
+    Plot a heatmap of P1 win % and tie %.
+    Each cell: 'P1% (Tie%)'
+    White = 0%, Blue = 100% (P1 win odds).
     """
     arr = np.array(p1_pct_matrix, dtype=float)
+    tie_arr = np.array(tie_pct_matrix, dtype=float)
     n = arr.shape[0]
-
-    # Mask only the main diagonal (same pattern for both players)
     mask = np.eye(n, dtype=bool)
 
     plt.figure(figsize=(9, 7))
-    cmap = plt.get_cmap("RdBu_r")  # reversed so blue = high (P1 wins)
+    cmap = plt.get_cmap("Blues")
 
-    # Annotation labels
     annot_labels = np.empty_like(arr, dtype=object)
     for i in range(n):
         for j in range(n):
             if mask[i, j] or np.isnan(arr[i, j]):
                 annot_labels[i, j] = ""
             else:
-                annot_labels[i, j] = f"{arr[i, j]:.1f}"
+                annot_labels[i, j] = f"{arr[i, j]:.1f} ({tie_arr[i, j]:.1f})"
 
     ax = sns.heatmap(
         arr,
         cmap=cmap,
-        center=50,
-        mask=mask,  # skip only same-sequence pairs
+        vmin=0,
+        vmax=100,
+        mask=mask,
         linewidths=0.5,
         cbar_kws={"label": "Player 1 win %"},
         xticklabels=seqs,
@@ -83,11 +82,10 @@ def plot_heatmap(p1_pct_matrix, seqs, title, outpath, highlight_best=True):
     ax.set_xlabel("Opponent (Player 2) pattern")
     ax.set_ylabel("Player 1 pattern")
 
-    # Highlight best column per row (max win% ignoring diagonal)
     if highlight_best:
         for i in range(n):
             row = arr[i, :].copy()
-            row[i] = np.nan  # ignore self-match
+            row[i] = np.nan
             if np.all(np.isnan(row)):
                 continue
             best_j = int(np.nanargmax(row))
@@ -120,10 +118,10 @@ def run_scoring_and_plots(limit_to_target=True):
     print(f"Saved CSVs: {csv_cards}, {csv_tricks}")
 
     # === Plot Heatmaps ===
-    plot_heatmap(cards_pct_p1, seqs,
+    plot_heatmap(cards_pct_p1, cards_pct_tie, seqs,
                  f"Player 1 Win % by Cards (n={decks_to_use:,})",
                  f"data/plots/heatmap_cards_n{decks_to_use}.png")
-    plot_heatmap(tricks_pct_p1, seqs,
+    plot_heatmap(tricks_pct_p1, tricks_pct_tie, seqs,
                  f"Player 1 Win % by Tricks (n={decks_to_use:,})",
                  f"data/plots/heatmap_tricks_n{decks_to_use}.png")
     print("Saved updated heatmaps.")
