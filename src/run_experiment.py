@@ -1,27 +1,38 @@
-# run_experiment.py
 import os
+import re
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from matplotlib.patches import Rectangle
 from bitarray import bitarray
-
 from src.create_data import create_deck_data_bitarray, _create_bitarray_batch
 from src.score_data import compute_winrate_table
 
-# === Global paths & parameters ===
-DECK_FILE = "data/decks/decks_bitarray.bin"
-TARGET_DECKS = 5_000_000
+DECKS_DIR = "data/decks"
+TARGET_DECKS = 100_000
 BATCH_SIZE = 10_000
 
 os.makedirs("data", exist_ok=True)
 os.makedirs("data/tables", exist_ok=True)
 os.makedirs("data/plots", exist_ok=True)
+os.makedirs(DECKS_DIR, exist_ok=True)
 
+def find_deck_file():
+    files = [f for f in os.listdir(DECKS_DIR) if re.match(r"decks_\d+\.bin", f)]
+    if not files:
+        return None, 0
+    counts = [(f, int(re.search(r"decks_(\d+)\.bin", f).group(1))) for f in files]
+    best = max(counts, key=lambda x: x[1])
+    return os.path.join(DECKS_DIR, best[0]), best[1]
 
-# === Utility functions ===
+def rename_deck_file(old_path, new_count):
+    new_name = f"decks_{new_count}.bin"
+    new_path = os.path.join(DECKS_DIR, new_name)
+    if old_path != new_path:
+        os.rename(old_path, new_path)
+    return new_path
+
 def file_deck_count(file_path: str) -> int:
-    """Return number of full 52-card decks in file."""
     if not os.path.exists(file_path):
         return 0
     ba = bitarray()
@@ -29,9 +40,7 @@ def file_deck_count(file_path: str) -> int:
         ba.fromfile(f)
     return len(ba) // 52
 
-
 def append_decks(file_path: str, num_to_add: int, batch_size: int = 10_000):
-    """Append num_to_add decks to existing bitarray file."""
     with open(file_path, "ab") as f:
         batches = [batch_size] * (num_to_add // batch_size)
         if num_to_add % batch_size:
@@ -42,27 +51,19 @@ def append_decks(file_path: str, num_to_add: int, batch_size: int = 10_000):
 
 
 def plot_heatmap(p1_pct_matrix, tie_pct_matrix, seqs, title, outpath, highlight_best=True):
-    """
-    Plot a heatmap of P1 win % and tie %.
-    Each cell: 'P1% (Tie%)'
-    White = 0%, Blue = 100% (P1 win odds).
-    """
-    arr = np.array(p1_pct_matrix, dtype=float)
-    tie_arr = np.array(tie_pct_matrix, dtype=float)
+    arr = np.nan_to_num(p1_pct_matrix, nan=0).astype(int)
+    tie_arr = np.nan_to_num(tie_pct_matrix, nan=0).astype(int)
     n = arr.shape[0]
     mask = np.eye(n, dtype=bool)
-
     plt.figure(figsize=(9, 7))
     cmap = plt.get_cmap("Blues")
-
     annot_labels = np.empty_like(arr, dtype=object)
     for i in range(n):
         for j in range(n):
-            if mask[i, j] or np.isnan(arr[i, j]):
+            if mask[i, j] or np.isnan(p1_pct_matrix[i, j]):
                 annot_labels[i, j] = ""
             else:
-                annot_labels[i, j] = f"{arr[i, j]:.1f} ({tie_arr[i, j]:.1f})"
-
+                annot_labels[i, j] = f"{arr[i, j]} ({tie_arr[i, j]})"
     ax = sns.heatmap(
         arr,
         cmap=cmap,
@@ -77,47 +78,37 @@ def plot_heatmap(p1_pct_matrix, tie_pct_matrix, seqs, title, outpath, highlight_
         fmt="",
         annot_kws={"size": 8, "color": "black"},
     )
-
     ax.set_title(title)
     ax.set_xlabel("Opponent (Player 2) pattern")
     ax.set_ylabel("Player 1 pattern")
-
     if highlight_best:
         for i in range(n):
-            row = arr[i, :].copy()
+            row = arr[i, :].astype(float).copy()
             row[i] = np.nan
             if np.all(np.isnan(row)):
                 continue
             best_j = int(np.nanargmax(row))
             ax.add_patch(Rectangle((best_j, i), 1, 1, fill=False, edgecolor='black', lw=2))
-
     plt.tight_layout()
     plt.savefig(outpath, dpi=200)
     plt.close()
 
 
-# === Scoring and plotting orchestration ===
-def run_scoring_and_plots(limit_to_target=True):
-    """Compute winrate tables and produce updated CSVs + plots."""
-    total_decks = file_deck_count(DECK_FILE)
-    decks_to_use = min(total_decks, TARGET_DECKS) if limit_to_target else total_decks
-
+def run_scoring_and_plots(deck_file, limit_to_target=True, decks_to_use=None):
+    total_decks = file_deck_count(deck_file)
+    if decks_to_use is None:
+        decks_to_use = min(total_decks, TARGET_DECKS) if limit_to_target else total_decks
     print(f"\nScoring using n = {decks_to_use:,} decks...")
-
     cards_df, tricks_df, cards_pct_p1, cards_pct_tie, tricks_pct_p1, tricks_pct_tie, seqs = \
         compute_winrate_table(
-            DECK_FILE, k=3, workers=None, batch_size=50_000,
+            deck_file, k=3, workers=None, batch_size=50_000,
             max_decks=decks_to_use, seq_order_binary=True
         )
-
-    # === Save CSVs ===
     csv_cards = f"data/tables/winrates_cards_n{decks_to_use}.csv"
     csv_tricks = f"data/tables/winrates_tricks_n{decks_to_use}.csv"
     cards_df.to_csv(csv_cards)
     tricks_df.to_csv(csv_tricks)
     print(f"Saved CSVs: {csv_cards}, {csv_tricks}")
-
-    # === Plot Heatmaps ===
     plot_heatmap(cards_pct_p1, cards_pct_tie, seqs,
                  f"Player 1 Win % by Cards (n={decks_to_use:,})",
                  f"data/plots/heatmap_cards_n{decks_to_use}.png")
@@ -127,39 +118,38 @@ def run_scoring_and_plots(limit_to_target=True):
     print("Saved updated heatmaps.")
 
 
-def augment_data(n: int):
-    """
-    Append n new decks, update scores, and regenerate figures.
-    Example:
-        >>> from run_experiment import augment_data
-        >>> augment_data(1000000)
-    """
-    print(f"\nAppending {n:,} new decks to {DECK_FILE}...")
-    append_decks(DECK_FILE, n)
-    total = file_deck_count(DECK_FILE)
-    print(f"New total decks: {total:,}")
-    run_scoring_and_plots(limit_to_target=True)
+def augment_data(n: int, prev_decks_to_use: int):
+    deck_file, cur_count = find_deck_file()
+    if not deck_file:
+        deck_file = os.path.join(DECKS_DIR, f"decks_0.bin")
+        cur_count = 0
+    print(f"\nAppending {n:,} new decks to {deck_file}...")
+    append_decks(deck_file, n)
+    new_count = cur_count + n
+    deck_file = rename_deck_file(deck_file, new_count)
+    print(f"New total decks: {new_count:,}")
+    decks_to_use = prev_decks_to_use + n
+    run_scoring_and_plots(deck_file, limit_to_target=False, decks_to_use=decks_to_use)
 
 
-# === Main entrypoint ===
 def main():
-    cur = file_deck_count(DECK_FILE)
-    if cur == 0:
+    deck_file, cur_count = find_deck_file()
+    prev_decks_to_use = TARGET_DECKS
+    if not deck_file:
         print(f"No deck file found. Creating {TARGET_DECKS:,} decks...")
+        deck_file = os.path.join(DECKS_DIR, f"decks_{TARGET_DECKS}.bin")
         create_deck_data_bitarray(num_decks=TARGET_DECKS,
-                                  output_name=os.path.basename(DECK_FILE),
+                                  output_name=os.path.basename(deck_file),
                                   batch_size=BATCH_SIZE)
         print("Deck creation finished.")
-    elif cur < TARGET_DECKS:
-        need = TARGET_DECKS - cur
-        print(f"Deck file has {cur:,} decks; creating {need:,} more to reach {TARGET_DECKS:,}.")
-        append_decks(DECK_FILE, need)
-    elif cur > TARGET_DECKS:
-        print(f"Deck file has {cur:,} decks; scoring only the first {TARGET_DECKS:,}.")
-
-    run_scoring_and_plots(limit_to_target=True)
-
-    # Ask user if they want to append more decks after initial run
+    elif cur_count < TARGET_DECKS:
+        need = TARGET_DECKS - cur_count
+        print(f"Deck file has {cur_count:,} decks; creating {need:,} more to reach {TARGET_DECKS:,}.")
+        append_decks(deck_file, need)
+        deck_file = rename_deck_file(deck_file, TARGET_DECKS)
+    elif cur_count > TARGET_DECKS:
+        print(f"Deck file has {cur_count:,} decks; scoring only the first {TARGET_DECKS:,}.")
+    run_scoring_and_plots(deck_file, limit_to_target=True)
     while True:
         resp = input("\nAppend more decks and rerun? [y/N]: ").strip().lower()
         if resp not in ("y", "yes"):
@@ -173,8 +163,8 @@ def main():
         except Exception:
             print("Invalid number.")
             continue
-        augment_data(add_n)
-
+        augment_data(add_n, prev_decks_to_use)
+        prev_decks_to_use += add_n
 
 if __name__ == "__main__":
     main()
