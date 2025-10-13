@@ -3,6 +3,7 @@ import re
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+import glob
 from matplotlib.patches import Rectangle
 from bitarray import bitarray
 from src.create_data import create_deck_data_bitarray, _create_bitarray_batch
@@ -118,19 +119,34 @@ def run_scoring_and_plots(deck_file, limit_to_target=True, decks_to_use=None):
     print("Saved updated heatmaps.")
 
 
-def augment_data(n: int, prev_decks_to_use: int):
-    deck_file, cur_count = find_deck_file()
-    if not deck_file:
-        deck_file = os.path.join(DECKS_DIR, f"decks_0.bin")
-        cur_count = 0
-    print(f"\nAppending {n:,} new decks to {deck_file}...")
-    append_decks(deck_file, n)
-    new_count = cur_count + n
-    deck_file = rename_deck_file(deck_file, new_count)
-    print(f"New total decks: {new_count:,}")
-    decks_to_use = prev_decks_to_use + n
-    run_scoring_and_plots(deck_file, limit_to_target=False, decks_to_use=decks_to_use)
+def delete_old_outputs(decks_to_use):
+    # Remove old CSVs and plots not matching the current decks_to_use
+    for f in glob.glob("data/tables/winrates_cards_n*.csv"):
+        if f != f"data/tables/winrates_cards_n{decks_to_use}.csv":
+            os.remove(f)
+    for f in glob.glob("data/tables/winrates_tricks_n*.csv"):
+        if f != f"data/tables/winrates_tricks_n{decks_to_use}.csv":
+            os.remove(f)
+    for f in glob.glob("data/plots/heatmap_cards_n*.png"):
+        if f != f"data/plots/heatmap_cards_n{decks_to_use}.png":
+            os.remove(f)
+    for f in glob.glob("data/plots/heatmap_tricks_n*.png"):
+        if f != f"data/plots/heatmap_tricks_n{decks_to_use}.png":
+            os.remove(f)
 
+
+def augment_or_rescore(n: int, prev_decks_to_use: int):
+    deck_file, cur_count = find_deck_file()
+    decks_to_use = prev_decks_to_use + n
+    if cur_count < decks_to_use:
+        print(f"\nAppending {decks_to_use - cur_count:,} new decks to {deck_file}...")
+        append_decks(deck_file, decks_to_use - cur_count)
+        deck_file = rename_deck_file(deck_file, decks_to_use)
+        print(f"New total decks: {decks_to_use:,}")
+    else:
+        print(f"\nDeck file has {cur_count:,} decks; scoring only the first {decks_to_use:,}.")
+    delete_old_outputs(decks_to_use)
+    run_scoring_and_plots(deck_file, limit_to_target=False, decks_to_use=decks_to_use)
 
 def main():
     deck_file, cur_count = find_deck_file()
@@ -149,6 +165,7 @@ def main():
         deck_file = rename_deck_file(deck_file, TARGET_DECKS)
     elif cur_count > TARGET_DECKS:
         print(f"Deck file has {cur_count:,} decks; scoring only the first {TARGET_DECKS:,}.")
+    delete_old_outputs(TARGET_DECKS)
     run_scoring_and_plots(deck_file, limit_to_target=True)
     while True:
         resp = input("\nAppend more decks and rerun? [y/N]: ").strip().lower()
@@ -163,8 +180,9 @@ def main():
         except Exception:
             print("Invalid number.")
             continue
-        augment_data(add_n, prev_decks_to_use)
+        augment_or_rescore(add_n, prev_decks_to_use)
         prev_decks_to_use += add_n
+
 
 if __name__ == "__main__":
     main()
