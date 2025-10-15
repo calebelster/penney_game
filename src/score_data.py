@@ -5,9 +5,7 @@ import numba as nb
 from concurrent.futures import ProcessPoolExecutor
 import pandas as pd
 
-
 def read_deck_file(file_path: str) -> np.ndarray:
-    """Read decks from a bitarray file -> NumPy array (n_decks, 52)."""
     ba = bitarray()
     with open(file_path, 'rb') as f:
         ba.fromfile(f)
@@ -16,14 +14,11 @@ def read_deck_file(file_path: str) -> np.ndarray:
     arr = arr[:n_decks * 52]
     return arr.reshape((n_decks, 52))
 
-
 @nb.njit
 def score_deck_humble_jit(deck: np.ndarray, s1: np.ndarray, s2: np.ndarray):
-    """Score one deck using Humble–Nishiyama rules."""
     k = s1.size
     p1_cards = p2_cards = p1_tricks = p2_tricks = 0
     last_award_idx = 0
-
     for i in range(k - 1, deck.size):
         match1 = True
         match2 = True
@@ -40,17 +35,12 @@ def score_deck_humble_jit(deck: np.ndarray, s1: np.ndarray, s2: np.ndarray):
             p2_cards += (i - last_award_idx + 1)
             p2_tricks += 1
             last_award_idx = i + 1
-
     return p1_cards, p2_cards, p1_tricks, p2_tricks
 
-
 def _seq_to_array(seq: str) -> np.ndarray:
-    """Convert 'rrb' → [1, 1, 0]."""
     return np.array([1 if c == 'r' else 0 for c in seq.lower()], dtype=np.uint8)
 
-
 def _batch_score(decks_chunk, seqs, seq_arrays):
-    """Score chunk of decks for all sequence pairs."""
     nseq = len(seqs)
     lc1 = np.zeros((nseq, nseq), dtype=np.int64)
     lc2 = np.zeros((nseq, nseq), dtype=np.int64)
@@ -58,7 +48,6 @@ def _batch_score(decks_chunk, seqs, seq_arrays):
     lt1 = np.zeros((nseq, nseq), dtype=np.int64)
     lt2 = np.zeros((nseq, nseq), dtype=np.int64)
     ltt = np.zeros((nseq, nseq), dtype=np.int64)
-
     for deck in decks_chunk:
         for i, s1 in enumerate(seqs):
             for j, s2 in enumerate(seqs):
@@ -81,9 +70,7 @@ def _batch_score(decks_chunk, seqs, seq_arrays):
                     ltt[i, j] += 1
     return lc1, lc2, lct, lt1, lt2, ltt
 
-
 def all_sequences_binary_order(k=3):
-    """Return ['bbb', 'bbr', ..., 'rrr'] (binary order with b=0, r=1)."""
     seqs = []
     for num in range(2 ** k):
         bits = [(num >> (k - 1 - i)) & 1 for i in range(k)]
@@ -91,48 +78,61 @@ def all_sequences_binary_order(k=3):
         seqs.append(seq)
     return seqs
 
-
-def compute_winrate_table(file_path: str, k: int = 3,
-                          workers: int = None, batch_size: int = 50_000,
-                          max_decks: int = None, seq_order_binary: bool = True):
-    """
-    Compute Humble–Nishiyama win/tie rates for all pairs.
-
-    Returns:
-      cards_df, tricks_df: formatted DataFrames ('P1% (Tie%)')
-      cards_pct_p1, cards_pct_tie, tricks_pct_p1, tricks_pct_tie, seqs
-    """
+def compute_winrate_table_incremental(
+    file_path: str,
+    k: int = 3,
+    workers: int = None,
+    batch_size: int = 50_000,
+    max_decks: int = None,
+    seq_order_binary: bool = True,
+    counts_cards_file: str = "counts_cards.npy",
+    counts_tricks_file: str = "counts_tricks.npy",
+    last_n_file: str = "last_n.txt"
+):
+    """Incremental update: only score decks after the last processed index."""
     decks = read_deck_file(file_path)
     if max_decks is not None:
         decks = decks[:max_decks]
     n = decks.shape[0]
-
     seqs = all_sequences_binary_order(k) if seq_order_binary else all_sequences(k)
     nseq = len(seqs)
     seq_arrays = {s: _seq_to_array(s) for s in seqs}
 
-    cards_p1 = np.zeros((nseq, nseq), dtype=np.int64)
-    cards_p2 = np.zeros((nseq, nseq), dtype=np.int64)
-    cards_tie = np.zeros((nseq, nseq), dtype=np.int64)
-    tricks_p1 = np.zeros((nseq, nseq), dtype=np.int64)
-    tricks_p2 = np.zeros((nseq, nseq), dtype=np.int64)
-    tricks_tie = np.zeros((nseq, nseq), dtype=np.int64)
+    # Load or initialize counts
+    if os.path.exists(counts_cards_file) and os.path.exists(counts_tricks_file) and os.path.exists(last_n_file):
+        cards_p1, cards_p2, cards_tie = np.load(counts_cards_file)
+        tricks_p1, tricks_p2, tricks_tie = np.load(counts_tricks_file)
+        with open(last_n_file, "r") as f:
+            last_n = int(f.read().strip())
+    else:
+        cards_p1 = np.zeros((nseq, nseq), dtype=np.int64)
+        cards_p2 = np.zeros((nseq, nseq), dtype=np.int64)
+        cards_tie = np.zeros((nseq, nseq), dtype=np.int64)
+        tricks_p1 = np.zeros((nseq, nseq), dtype=np.int64)
+        tricks_p2 = np.zeros((nseq, nseq), dtype=np.int64)
+        tricks_tie = np.zeros((nseq, nseq), dtype=np.int64)
+        last_n = 0
 
-    if workers is None:
-        workers = os.cpu_count()
-
-    chunks = [decks[i:i + batch_size] for i in range(0, n, batch_size)]
-
-    with ProcessPoolExecutor(max_workers=workers) as ex:
-        futures = [ex.submit(_batch_score, chunk, seqs, seq_arrays) for chunk in chunks]
-        for fut in futures:
-            lc1, lc2, lct, lt1, lt2, ltt = fut.result()
-            cards_p1 += lc1
-            cards_p2 += lc2
-            cards_tie += lct
-            tricks_p1 += lt1
-            tricks_p2 += lt2
-            tricks_tie += ltt
+    if n > last_n:
+        new_decks = decks[last_n:]
+        chunks = [new_decks[i:i + batch_size] for i in range(0, len(new_decks), batch_size)]
+        if workers is None:
+            workers = os.cpu_count()
+        with ProcessPoolExecutor(max_workers=workers) as ex:
+            futures = [ex.submit(_batch_score, chunk, seqs, seq_arrays) for chunk in chunks]
+            for fut in futures:
+                lc1, lc2, lct, lt1, lt2, ltt = fut.result()
+                cards_p1 += lc1
+                cards_p2 += lc2
+                cards_tie += lct
+                tricks_p1 += lt1
+                tricks_p2 += lt2
+                tricks_tie += ltt
+        # Save updated counts and index
+        np.save(counts_cards_file, [cards_p1, cards_p2, cards_tie])
+        np.save(counts_tricks_file, [tricks_p1, tricks_p2, tricks_tie])
+        with open(last_n_file, "w") as f:
+            f.write(str(n))
 
     def _pct_matrices(p1, p2, tie):
         total = p1 + p2 + tie
@@ -159,5 +159,4 @@ def compute_winrate_table(file_path: str, k: int = 3,
 
     cards_df = _format_str_matrix(cards_pct_p1, cards_pct_tie)
     tricks_df = _format_str_matrix(tricks_pct_p1, tricks_pct_tie)
-
     return cards_df, tricks_df, cards_pct_p1, cards_pct_tie, tricks_pct_p1, tricks_pct_tie, seqs

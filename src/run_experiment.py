@@ -7,7 +7,7 @@ import glob
 from matplotlib.patches import Rectangle
 from bitarray import bitarray
 from src.create_data import create_deck_data_bitarray, _create_bitarray_batch
-from src.score_data import compute_winrate_table
+from src.score_data import compute_winrate_table_incremental
 
 DECKS_DIR = "data/decks"
 TARGET_DECKS = 100_000
@@ -100,11 +100,15 @@ def run_scoring_and_plots(deck_file, limit_to_target=True, decks_to_use=None):
     if decks_to_use is None:
         decks_to_use = min(total_decks, TARGET_DECKS) if limit_to_target else total_decks
     print(f"\nScoring using n = {decks_to_use:,} decks...")
-    cards_df, tricks_df, cards_pct_p1, cards_pct_tie, tricks_pct_p1, tricks_pct_tie, seqs = \
-        compute_winrate_table(
-            deck_file, k=3, workers=None, batch_size=50_000,
-            max_decks=decks_to_use, seq_order_binary=True
-        )
+    deck_file_path, _ = find_deck_file()
+    cards_df, tricks_df, cards_pct_p1, cards_pct_tie, tricks_pct_p1, tricks_pct_tie, seqs = compute_winrate_table_incremental(
+        deck_file_path,
+        k=3,
+        counts_cards_file="counts_cards.npy",
+        counts_tricks_file="counts_tricks.npy",
+        last_n_file="last_n.txt"
+    )
+
     csv_cards = f"data/tables/winrates_cards_n{decks_to_use}.csv"
     csv_tricks = f"data/tables/winrates_tricks_n{decks_to_use}.csv"
     cards_df.to_csv(csv_cards)
