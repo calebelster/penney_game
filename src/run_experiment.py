@@ -10,8 +10,8 @@ from src.create_data import create_deck_data_bitarray, _create_bitarray_batch
 from src.score_data import compute_winrate_table_incremental
 
 DECKS_DIR = "data/decks"
-TARGET_DECKS = 100_000
-BATCH_SIZE = 10_000
+TARGET_DECKS = 100000
+BATCH_SIZE = 10000
 
 os.makedirs("data", exist_ok=True)
 os.makedirs("data/tables", exist_ok=True)

@@ -19,22 +19,33 @@ def score_deck_humble_jit(deck: np.ndarray, s1: np.ndarray, s2: np.ndarray):
     k = s1.size
     p1_cards = p2_cards = p1_tricks = p2_tricks = 0
     last_award_idx = 0
-    for i in range(k - 1, deck.size):
+    i = k - 1
+    while i < deck.size:
         match1 = True
         match2 = True
+        # Only check if window starts at or after last_award_idx
+        start_idx = i - k + 1
+        if start_idx < last_award_idx:
+            i += 1
+            continue
         for j in range(k):
-            if deck[i - k + 1 + j] != s1[j]:
+            if deck[start_idx + j] != s1[j]:
                 match1 = False
-            if deck[i - k + 1 + j] != s2[j]:
+            if deck[start_idx + j] != s2[j]:
                 match2 = False
         if match1:
             p1_cards += (i - last_award_idx + 1)
             p1_tricks += 1
             last_award_idx = i + 1
+            i = last_award_idx + k - 1  # Jump to next possible window after reset
         elif match2:
             p2_cards += (i - last_award_idx + 1)
             p2_tricks += 1
             last_award_idx = i + 1
+            i = last_award_idx + k - 1
+        else:
+            i += 1
+
     return p1_cards, p2_cards, p1_tricks, p2_tricks
 
 def _seq_to_array(seq: str) -> np.ndarray:
