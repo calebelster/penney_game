@@ -96,9 +96,9 @@ def compute_winrate_table_incremental(
     batch_size: int = 50_000,
     max_decks: int = None,
     seq_order_binary: bool = True,
-    counts_cards_file: str = "counts_cards.npy",
-    counts_tricks_file: str = "counts_tricks.npy",
-    last_n_file: str = "last_n.txt"
+    counts_cards_file: str = "data/tracking_decks/counts_cards.npy",
+    counts_tricks_file: str = "data/tracking_decks/counts_tricks.npy",
+    last_n_file: str = "data/tracking_decks/last_n.txt"
 ):
     """Incremental update: only score decks after the last processed index."""
     decks = read_deck_file(file_path)

@@ -10,8 +10,8 @@ from src.create_data import create_deck_data_bitarray, _create_bitarray_batch
 from src.score_data import compute_winrate_table_incremental
 
 DECKS_DIR = "data/decks"
-TARGET_DECKS = 100000
-BATCH_SIZE = 10000
+TARGET_DECKS = 5_000_000
+BATCH_SIZE = 10_000
 
 os.makedirs("data", exist_ok=True)
 os.makedirs("data/tables", exist_ok=True)
@@ -52,8 +52,9 @@ def append_decks(file_path: str, num_to_add: int, batch_size: int = 10_000):
 
 
 def plot_heatmap(p1_pct_matrix, tie_pct_matrix, seqs, title, outpath, highlight_best=True):
-    arr = np.nan_to_num(p1_pct_matrix, nan=0).astype(int)
-    tie_arr = np.nan_to_num(tie_pct_matrix, nan=0).astype(int)
+    # Notice we transpose the matrix to swap axes here
+    arr = np.nan_to_num(p1_pct_matrix, nan=0).astype(int).T
+    tie_arr = np.nan_to_num(tie_pct_matrix, nan=0).astype(int).T
     n = arr.shape[0]
     mask = np.eye(n, dtype=bool)
     plt.figure(figsize=(9, 7))
@@ -61,7 +62,7 @@ def plot_heatmap(p1_pct_matrix, tie_pct_matrix, seqs, title, outpath, highlight_
     annot_labels = np.empty_like(arr, dtype=object)
     for i in range(n):
         for j in range(n):
-            if mask[i, j] or np.isnan(p1_pct_matrix[i, j]):
+            if mask[i, j] or np.isnan(p1_pct_matrix[j, i]):  # indices swapped for original matrix check
                 annot_labels[i, j] = ""
             else:
                 annot_labels[i, j] = f"{arr[i, j]} ({tie_arr[i, j]})"
@@ -80,8 +81,9 @@ def plot_heatmap(p1_pct_matrix, tie_pct_matrix, seqs, title, outpath, highlight_
         annot_kws={"size": 8, "color": "black"},
     )
     ax.set_title(title)
-    ax.set_xlabel("Opponent (Player 2) pattern")
-    ax.set_ylabel("Player 1 pattern")
+    # Swap axis labels for correct meaning
+    ax.set_xlabel("Player 1 pattern")
+    ax.set_ylabel("Opponent (Player 2) pattern")
     if highlight_best:
         for i in range(n):
             row = arr[i, :].astype(float).copy()
@@ -104,9 +106,9 @@ def run_scoring_and_plots(deck_file, limit_to_target=True, decks_to_use=None):
     cards_df, tricks_df, cards_pct_p1, cards_pct_tie, tricks_pct_p1, tricks_pct_tie, seqs = compute_winrate_table_incremental(
         deck_file_path,
         k=3,
-        counts_cards_file="counts_cards.npy",
-        counts_tricks_file="counts_tricks.npy",
-        last_n_file="last_n.txt"
+        counts_cards_file="data/tracking_decks/counts_cards.npy",
+        counts_tricks_file="data/tracking_decks/counts_tricks.npy",
+        last_n_file="data/tracking_decks/last_n.txt"
     )
 
     csv_cards = f"data/tables/winrates_cards_n{decks_to_use}.csv"
