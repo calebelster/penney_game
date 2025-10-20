@@ -5,6 +5,10 @@ import concurrent.futures
 from typing import List
 
 def _create_bitarray_batch(size: int) -> bitarray:
+    """
+    Create a batch of shuffled decks encoded as bitarrays.
+    Each deck has 52 cards, shuffled.
+    """
     batch = bitarray()
     for _ in range(size):
         deck = np.array([0] * 26 + [1] * 26, dtype=np.uint8)
@@ -12,7 +16,10 @@ def _create_bitarray_batch(size: int) -> bitarray:
         batch.extend(deck)
     return batch
 
-def create_deck_data_bitarray(num_decks=2_000_000, output_name='decks_bitarray.bin', batch_size=10000):
+def create_deck_data_bitarray(num_decks=5_000_000, output_name='decks_bitarray.bin', batch_size=50_000):
+    """
+    Create and save num_decks decks in batches as bitarray in a file.
+    """
     output_dir = 'data/decks'
     os.makedirs(output_dir, exist_ok=True)
     output_path = os.path.join(output_dir, output_name)

@@ -11,7 +11,7 @@ from src.score_data import compute_winrate_table_incremental
 
 DECKS_DIR = "data/decks"
 TARGET_DECKS = 5_000_000
-BATCH_SIZE = 10_000
+BATCH_SIZE = 50_000
 
 os.makedirs("data", exist_ok=True)
 os.makedirs("data/tables", exist_ok=True)
@@ -19,6 +19,10 @@ os.makedirs("data/plots", exist_ok=True)
 os.makedirs(DECKS_DIR, exist_ok=True)
 
 def find_deck_file():
+    """
+    Find the deck file with highest deck count in DECKS_DIR, following naming pattern.
+    Returns tuple: (path, count)
+    """
     files = [f for f in os.listdir(DECKS_DIR) if re.match(r"decks_\d+\.bin", f)]
     if not files:
         return None, 0
@@ -27,6 +31,9 @@ def find_deck_file():
     return os.path.join(DECKS_DIR, best[0]), best[1]
 
 def rename_deck_file(old_path, new_count):
+    """
+    Rename deck file to reflect new deck count.
+    """
     new_name = f"decks_{new_count}.bin"
     new_path = os.path.join(DECKS_DIR, new_name)
     if old_path != new_path:
@@ -34,6 +41,9 @@ def rename_deck_file(old_path, new_count):
     return new_path
 
 def file_deck_count(file_path: str) -> int:
+    """
+    Return the number of decks in a given file by total bits divided by 52.
+    """
     if not os.path.exists(file_path):
         return 0
     ba = bitarray()
@@ -42,6 +52,9 @@ def file_deck_count(file_path: str) -> int:
     return len(ba) // 52
 
 def append_decks(file_path: str, num_to_add: int, batch_size: int = 10_000):
+    """
+    Append new randomly-generated decks to an existing deck file.
+    """
     with open(file_path, "ab") as f:
         batches = [batch_size] * (num_to_add // batch_size)
         if num_to_add % batch_size:
@@ -52,7 +65,10 @@ def append_decks(file_path: str, num_to_add: int, batch_size: int = 10_000):
 
 
 def plot_heatmap(p1_pct_matrix, tie_pct_matrix, seqs, title, outpath, highlight_best=True):
-    # Notice we transpose the matrix to swap axes here
+    """
+    Create a heatmap showing win/draw probabilities, coloring by win likelihood.
+    Highlight row-best (highest win probability) cell with black box.
+    """
     arr = np.nan_to_num(p1_pct_matrix, nan=0).astype(int).T
     tie_arr = np.nan_to_num(tie_pct_matrix, nan=0).astype(int).T
     n = arr.shape[0]
@@ -62,7 +78,7 @@ def plot_heatmap(p1_pct_matrix, tie_pct_matrix, seqs, title, outpath, highlight_
     annot_labels = np.empty_like(arr, dtype=object)
     for i in range(n):
         for j in range(n):
-            if mask[i, j] or np.isnan(p1_pct_matrix[j, i]):  # indices swapped for original matrix check
+            if mask[i, j] or np.isnan(p1_pct_matrix[j, i]):
                 annot_labels[i, j] = ""
             else:
                 annot_labels[i, j] = f"{arr[i, j]} ({tie_arr[i, j]})"
@@ -81,7 +97,6 @@ def plot_heatmap(p1_pct_matrix, tie_pct_matrix, seqs, title, outpath, highlight_
         annot_kws={"size": 8, "color": "black"},
     )
     ax.set_title(title)
-    # Swap axis labels for correct meaning
     ax.set_xlabel("Player 1 pattern")
     ax.set_ylabel("Opponent (Player 2) pattern")
     if highlight_best:
@@ -98,6 +113,10 @@ def plot_heatmap(p1_pct_matrix, tie_pct_matrix, seqs, title, outpath, highlight_
 
 
 def run_scoring_and_plots(deck_file, limit_to_target=True, decks_to_use=None):
+    """
+    Run scoring and plot heatmaps for both scoring methods (cards, tricks).
+    Save results as CSVs and plots in expected locations.
+    """
     total_decks = file_deck_count(deck_file)
     if decks_to_use is None:
         decks_to_use = min(total_decks, TARGET_DECKS) if limit_to_target else total_decks
@@ -126,7 +145,10 @@ def run_scoring_and_plots(deck_file, limit_to_target=True, decks_to_use=None):
 
 
 def delete_old_outputs(decks_to_use):
-    # Remove old CSVs and plots not matching the current decks_to_use
+    """
+    Delete old CSVs and plots not matching the current decks_to_use value.
+    Ensures only current outputs remain.
+    """
     for f in glob.glob("data/tables/winrates_cards_n*.csv"):
         if f != f"data/tables/winrates_cards_n{decks_to_use}.csv":
             os.remove(f)
@@ -142,6 +164,9 @@ def delete_old_outputs(decks_to_use):
 
 
 def augment_or_rescore(n: int, prev_decks_to_use: int):
+    """
+    Add n new decks, renaming file when finished, and rescore using updated deck count.
+    """
     deck_file, cur_count = find_deck_file()
     decks_to_use = prev_decks_to_use + n
     if cur_count < decks_to_use:
@@ -154,7 +179,20 @@ def augment_or_rescore(n: int, prev_decks_to_use: int):
     delete_old_outputs(decks_to_use)
     run_scoring_and_plots(deck_file, limit_to_target=False, decks_to_use=decks_to_use)
 
+
+def augment_data(n: int):
+    """
+    Create n new decks and update scores/figures accordingly.
+    """
+    deck_file, cur_count = find_deck_file()
+    augment_or_rescore(n, cur_count)
+
+
 def main():
+    """
+    Main experiment driver. Creates decks (if missing), then scores and plots results.
+    Prompts to augment further decks.
+    """
     deck_file, cur_count = find_deck_file()
     prev_decks_to_use = TARGET_DECKS
     if not deck_file:

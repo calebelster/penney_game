@@ -6,6 +6,9 @@ from concurrent.futures import ProcessPoolExecutor
 import pandas as pd
 
 def read_deck_file(file_path: str) -> np.ndarray:
+    """
+    Load a deck file, returning decks as np.ndarray shape (n_decks, 52).
+    """
     ba = bitarray()
     with open(file_path, 'rb') as f:
         ba.fromfile(f)
@@ -16,6 +19,9 @@ def read_deck_file(file_path: str) -> np.ndarray:
 
 @nb.njit
 def score_deck_humble_jit(deck: np.ndarray, s1: np.ndarray, s2: np.ndarray):
+    """
+    For one deck and two patterns, score total cards/tricks for each, for given window k.
+    """
     k = s1.size
     p1_cards = p2_cards = p1_tricks = p2_tricks = 0
     last_award_idx = 0
@@ -49,9 +55,15 @@ def score_deck_humble_jit(deck: np.ndarray, s1: np.ndarray, s2: np.ndarray):
     return p1_cards, p2_cards, p1_tricks, p2_tricks
 
 def _seq_to_array(seq: str) -> np.ndarray:
+    """
+    Convert a pattern string to array of 1 (R) and 0 (B).
+    """
     return np.array([1 if c == 'r' else 0 for c in seq.lower()], dtype=np.uint8)
 
 def _batch_score(decks_chunk, seqs, seq_arrays):
+    """
+    For a chunk of decks, and patterns, tabulate win/draw for both scoring systems.
+    """
     nseq = len(seqs)
     lc1 = np.zeros((nseq, nseq), dtype=np.int64)
     lc2 = np.zeros((nseq, nseq), dtype=np.int64)
@@ -82,6 +94,9 @@ def _batch_score(decks_chunk, seqs, seq_arrays):
     return lc1, lc2, lct, lt1, lt2, ltt
 
 def all_sequences_binary_order(k=3):
+    """
+    Generate all binary sequences of length k, in ascending integer value order.
+    """
     seqs = []
     for num in range(2 ** k):
         bits = [(num >> (k - 1 - i)) & 1 for i in range(k)]
@@ -100,7 +115,10 @@ def compute_winrate_table_incremental(
     counts_tricks_file: str = "data/tracking_decks/counts_tricks.npy",
     last_n_file: str = "data/tracking_decks/last_n.txt"
 ):
-    """Incremental update: only score decks after the last processed index."""
+    """
+    Tabulate win rates for deck file, incrementally updating counts for only new decks.
+    Returns DataFrames and raw matrices for heatmap.
+    """
     decks = read_deck_file(file_path)
     if max_decks is not None:
         decks = decks[:max_decks]
